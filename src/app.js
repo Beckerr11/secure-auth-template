@@ -1,9 +1,13 @@
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
 
+const ACCESS_TTL_SECONDS = 60 * 15
+const REFRESH_TTL_MS = 7 * 24 * 60 * 60 * 1000
+
 export function createStore() {
   return {
     users: [],
     resetTokens: [],
+    refreshTokens: [],
   }
 }
 
@@ -18,12 +22,55 @@ function comparePassword(password, storedHash) {
   return timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(check, 'hex'))
 }
 
-function signToken(payload, secret, ttlSeconds = 3600) {
+function signToken(payload, secret, ttlSeconds = ACCESS_TTL_SECONDS) {
   const exp = Math.floor(Date.now() / 1000) + ttlSeconds
   const data = { ...payload, exp }
   const body = Buffer.from(JSON.stringify(data)).toString('base64url')
   const sig = createHmac('sha256', secret).update(body).digest('base64url')
   return `${body}.${sig}`
+}
+
+function verifyToken(token, secret) {
+  const [body, sig] = String(token || '').split('.')
+  if (!body || !sig) {
+    throw new Error('token invalido')
+  }
+
+  const expectedSig = createHmac('sha256', secret).update(body).digest('base64url')
+  const left = Buffer.from(expectedSig)
+  const right = Buffer.from(sig)
+
+  if (left.length !== right.length || !timingSafeEqual(left, right)) {
+    throw new Error('assinatura de token invalida')
+  }
+
+  const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'))
+  if (!payload.exp || payload.exp < Math.floor(Date.now() / 1000)) {
+    throw new Error('token expirado')
+  }
+
+  return payload
+}
+
+function issueRefreshToken(store, userId) {
+  const token = randomBytes(24).toString('hex')
+  const record = {
+    token,
+    userId,
+    expiresAt: Date.now() + REFRESH_TTL_MS,
+    revokedAt: null,
+  }
+
+  store.refreshTokens.push(record)
+  return token
+}
+
+function resolveUser(store, userId) {
+  const user = store.users.find((item) => item.id === userId)
+  if (!user) {
+    throw new Error('usuario nao encontrado')
+  }
+  return user
 }
 
 export function registerUser(store, { name, email, password }) {
@@ -60,10 +107,42 @@ export function loginUser(store, { email, password }, jwtSecret) {
     throw new Error('credenciais invalidas')
   }
 
+  const accessToken = signToken({ sub: user.id, email: user.email }, jwtSecret)
+  const refreshToken = issueRefreshToken(store, user.id)
+
   return {
-    token: signToken({ sub: user.id, email: user.email }, jwtSecret),
+    accessToken,
+    refreshToken,
     user: { id: user.id, name: user.name, email: user.email },
   }
+}
+
+export function refreshSession(store, { refreshToken }, jwtSecret) {
+  const record = store.refreshTokens.find((item) => item.token === refreshToken)
+  if (!record || record.revokedAt || record.expiresAt < Date.now()) {
+    throw new Error('refresh token invalido ou expirado')
+  }
+
+  const user = resolveUser(store, record.userId)
+  const accessToken = signToken({ sub: user.id, email: user.email }, jwtSecret)
+
+  return {
+    accessToken,
+    user: { id: user.id, name: user.name, email: user.email },
+  }
+}
+
+export function authMe(store, authorizationHeader, jwtSecret) {
+  const value = String(authorizationHeader || '')
+  if (!value.startsWith('Bearer ')) {
+    throw new Error('token bearer ausente')
+  }
+
+  const token = value.slice('Bearer '.length)
+  const payload = verifyToken(token, jwtSecret)
+  const user = resolveUser(store, payload.sub)
+
+  return { id: user.id, name: user.name, email: user.email }
 }
 
 export function requestPasswordReset(store, { email }) {
@@ -94,11 +173,7 @@ export function resetPassword(store, { token, newPassword }) {
     throw new Error('newPassword precisa ter ao menos 8 caracteres')
   }
 
-  const user = store.users.find((item) => item.id === record.userId)
-  if (!user) {
-    throw new Error('usuario nao encontrado')
-  }
-
+  const user = resolveUser(store, record.userId)
   user.passwordHash = hashPassword(newPassword)
   record.usedAt = Date.now()
 
@@ -163,6 +238,19 @@ export function createApp(store = createStore(), jwtSecret = process.env.JWT_SEC
         const payload = await readJsonBody(req)
         const session = loginUser(store, payload, jwtSecret)
         sendJson(res, 200, session)
+        return
+      }
+
+      if (req.method === 'POST' && url.pathname === '/auth/refresh') {
+        const payload = await readJsonBody(req)
+        const session = refreshSession(store, payload, jwtSecret)
+        sendJson(res, 200, session)
+        return
+      }
+
+      if (req.method === 'GET' && url.pathname === '/auth/me') {
+        const user = authMe(store, req.headers.authorization, jwtSecret)
+        sendJson(res, 200, { user })
         return
       }
 

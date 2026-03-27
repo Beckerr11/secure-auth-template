@@ -1,34 +1,44 @@
-# secure-auth-template
+﻿# secure-auth-template
 
-Template de autenticacao segura com login local e social.
+![CI](https://github.com/Beckerr11/secure-auth-template/actions/workflows/ci.yml/badge.svg)
+
+Template de autenticacao segura.
 
 ## Objetivo
-Construir uma base profissional para portfolio full stack com foco em simplicidade, clareza e evolucao incremental.
+Este repositorio faz parte de uma trilha de portfolio profissional full stack, com foco em simplicidade, clareza e boas praticas.
 
 ## Stack
-Node.js + JWT + OAuth + 2FA
+Node.js, JWT custom, OAuth-ready social login
 
-## MVP (v0.1)
-- Cadastro e login
-- Reset de senha
-- Login social
-- Politicas de seguranca
-
-## Estrutura inicial
-- docs/ROADMAP.md: plano de evolucao
-- src/: codigo fonte principal
-- 	ests/: testes iniciais
-- .github/workflows/ci.yml: pipeline minima
+## Funcionalidades implementadas
+- Cadastro/login com senha e refresh token
+- Fluxo social OAuth-ready com state
+- Upgrade de conta social para senha local
+- Reset de senha e endpoint /auth/me
 
 ## Como executar
-Veja as instrucoes no docs/ROADMAP.md e no bloco de setup abaixo.
-`ash
-npm install
+~~~bash
+npm ci
 npm test
 npm run dev
-`
+~~~
+
+## Scripts uteis
+- npm run dev, npm test
+
+## Qualidade
+- CI em .github/workflows/ci.yml
+- Dependabot em .github/dependabot.yml
+- Testes locais obrigatorios antes de merge
+
+## Documentacao
+- [Roadmap](docs/ROADMAP.md)
+- [Checklist de producao](docs/PRODUCTION-CHECKLIST.md)
+- [Contribuicao](CONTRIBUTING.md)
+- [Seguranca](SECURITY.md)
+
 ## Status
 - [x] Scaffold inicial
-- [ ] MVP funcional
-- [ ] Deploy publico
-- [ ] Observabilidade e seguranca avancada
+- [x] Base funcional com testes
+- [ ] Deploy publico com observabilidade completa
+- [ ] Versao 1.0.0 com demo publica

@@ -1,8 +1,10 @@
+import { buildLandingHtml } from './ui/landing.js'
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
 
 const ACCESS_TTL_SECONDS = 60 * 15
 const REFRESH_TTL_MS = 7 * 24 * 60 * 60 * 1000
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000
+const MAX_BODY_SIZE_BYTES = 1_000_000
 const SOCIAL_PROVIDERS = new Set(['google', 'github'])
 
 export function createStore() {
@@ -355,7 +357,16 @@ function sendJson(res, statusCode, payload) {
 function readJsonBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = []
-    req.on('data', (chunk) => chunks.push(chunk))
+    let totalSize = 0
+    req.on('data', (chunk) => {
+      totalSize += chunk.length
+      if (totalSize > MAX_BODY_SIZE_BYTES) {
+        reject(new Error('payload excede limite de 1MB'))
+        req.destroy()
+        return
+      }
+      chunks.push(chunk)
+    })
     req.on('end', () => {
       if (!chunks.length) {
         resolve({})
@@ -383,6 +394,12 @@ export function createApp(
     const url = new URL(req.url || '/', 'http://localhost')
 
     try {
+            if (req.method === 'GET' && url.pathname === '/') {
+        res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
+        res.end(buildLandingHtml())
+        return
+      }
+
       if (req.method === 'GET' && url.pathname === '/health') {
         sendJson(res, 200, { ok: true, service: 'secure-auth-template' })
         return
@@ -479,3 +496,5 @@ export function createApp(
     }
   }
 }
+
+

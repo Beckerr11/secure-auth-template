@@ -94,5 +94,5 @@ Para transformar esta referência em um serviço de autenticação real seria ne
 
 ## Autor
 
-**Douglas Silva**  
-[GitHub](https://github.com/Beckerr11) · [Portfólio](https://douglasdev.tech)
+**Becker**  
+[GitHub](https://github.com/Beckerr11) · [Portfólio](https://github.com/Beckerr11)
